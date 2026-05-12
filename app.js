@@ -1,10 +1,16 @@
 import express from "express";
 import cookieParser from "cookie-parser";
-import { PORT } from "./config/env.js";
+import cors from "cors";
+import { PORT, FRONTEND_LOCAL_URL } from "./config/env.js";
 import { connectDB } from "./database/Neon.js";
 import authRouter from "./routes/auth.routes.js";
 
 const app = express()
+
+app.use(cors({
+    origin: FRONTEND_LOCAL_URL,
+    credentials: true,
+}));
 
 app.use(express.json());
 app.use(cookieParser());
