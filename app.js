@@ -1,4 +1,5 @@
 import express from "express";
+import { PORT } from "./config/env.js";
 
 const app = express()
 
@@ -9,8 +10,8 @@ app.get("/", (req, res) => {
     })
 })
 
-app.listen(5500, () => {
-    console.log("The NTCOGK Backend API is running on http://localhost:5500")
+app.listen(PORT, () => {
+    console.log(`The NTCOGK Backend API is running on http://localhost:${PORT}`)
 })
 
 export default app;
