@@ -6,3 +6,22 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum Role {
+  MEMBER
+  CLERGY
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(uuid())
+  fullName  String
+  email     String   @unique
+  password  String
+  role      Role     @default(MEMBER)
+  title     String?  // For clergy, e.g., "Senior Pastor"
+  branch    String?  // e.g., "Karen Chapel"
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
