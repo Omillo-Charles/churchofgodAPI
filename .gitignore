@@ -109,3 +109,5 @@ package-lock.json
 .env.local
 .env.production
 /generated/prisma
+
+/generated/prisma
