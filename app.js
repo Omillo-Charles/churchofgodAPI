@@ -1,10 +1,13 @@
 import express from "express";
 import cookieParser from "cookie-parser";
+import { PORT } from "./config/env.js";
 
 const app = express();
 
 app.use(cookieParser())
-app.use("/api/v1")
+app.use("/api/v1", (req, res, next) => {
+  next();
+});
 
 app.get("/", (req, res) => {
   res.json({
@@ -13,8 +16,8 @@ app.get("/", (req, res) => {
   })
 })
 
-app.listen(PORT, () => {
-  console.log(`The NTCOGK Backend API is running on http://localhost:${PORT}`)
+app.listen(PORT || 5500, () => {
+  console.log(`The NTCOGK Backend API is running on http://localhost:${PORT || 5500}`)
 })
 
 export default app;
