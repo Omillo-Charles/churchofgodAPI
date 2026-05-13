@@ -1,23 +1,38 @@
-import express from "express";
-import cookieParser from "cookie-parser";
-import { PORT } from "./config/env.js";
+import express from 'express';
+import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
+import { PORT } from './config/env.js';
+import prisma from './database/postgresql.js';
 
 const app = express();
 
-app.use(cookieParser())
-app.use("/api/v1", (req, res, next) => {
-  next();
+app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+
+app.get('/api/v1', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: 'Welcome to the NTCOGK API'
+    });
 });
 
-app.get("/", (req, res) => {
-  res.json({
-    title: "The NTCOGK Backend API",
-    body: "Welcome to the NTCOGK Backend API"
-  })
-})
+const startServer = async () => {
+    try {
+        await prisma.$connect();
+        console.log('Database connected successfully');
 
-app.listen(PORT || 5500, () => {
-  console.log(`The NTCOGK Backend API is running on http://localhost:${PORT || 5500}`)
-})
+        const serverPort = PORT || 5500;
+        app.listen(serverPort, () => {
+            console.log(`The NTCOGK API is running on http://localhost:${serverPort}/api/v1`);
+        });
+    } catch (error) {
+        console.error('Failed to connect to the database', error);
+        process.exit(1);
+    }
+};
+
+startServer();
 
 export default app;

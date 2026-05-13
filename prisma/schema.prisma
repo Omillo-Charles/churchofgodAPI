@@ -1,16 +1,10 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-}
-
-enum Role {
-  MEMBER
-  CLERGY
-  ADMIN
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -18,10 +12,6 @@ model User {
   fullName  String
   email     String   @unique
   password  String
-  role      Role     @default(MEMBER)
-  title     String?  // For clergy, e.g., "Senior Pastor"
-  branch    String?  // e.g., "Karen Chapel"
-  avatar    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
