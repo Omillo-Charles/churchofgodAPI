@@ -7,7 +7,7 @@ import { sendEmail } from '../utils/mailer.js';
 import { forgotPasswordTemplate, passwordResetSuccessTemplate } from '../utils/emailTemplates.js';
 
 // POST /api/v1/auth/signup
-export const signUp = async (req, res) => {
+export const signUp = async (req, res, next) => {
     const { fullName, email, password } = req.body;
 
     // Basic field validation
@@ -60,16 +60,12 @@ export const signUp = async (req, res) => {
             user,
         });
     } catch (error) {
-        console.error('[signUp] Error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'An internal server error occurred. Please try again.',
-        });
+        next(error);
     }
 };
 
 // POST /api/v1/auth/signin
-export const signIn = async (req, res) => {
+export const signIn = async (req, res, next) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -124,11 +120,7 @@ export const signIn = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('[signIn] Error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'An internal server error occurred. Please try again.',
-        });
+        next(error);
     }
 };
 
@@ -147,7 +139,7 @@ export const signOut = async (req, res) => {
 };
 
 // POST /api/v1/auth/forgot-password
-export const forgotPassword = async (req, res) => {
+export const forgotPassword = async (req, res, next) => {
     const { email } = req.body;
 
     if (!email) {
@@ -194,16 +186,12 @@ export const forgotPassword = async (req, res) => {
             message: 'If an account with that email exists, a recovery link has been sent.',
         });
     } catch (error) {
-        console.error('[forgotPassword] Error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'An internal server error occurred. Please try again.',
-        });
+        next(error);
     }
 };
 
 // POST /api/v1/auth/reset-password
-export const resetPassword = async (req, res) => {
+export const resetPassword = async (req, res, next) => {
     const { token, newPassword } = req.body;
 
     if (!token || !newPassword) {
@@ -260,10 +248,6 @@ export const resetPassword = async (req, res) => {
             message: 'Password reset successful! You can now sign in with your new password.',
         });
     } catch (error) {
-        console.error('[resetPassword] Error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'An internal server error occurred. Please try again.',
-        });
+        next(error);
     }
 };
