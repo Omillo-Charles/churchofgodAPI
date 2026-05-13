@@ -227,9 +227,7 @@ const emailBase = (bodyContent) => /* html */`
 </html>
 `;
 
-// ─────────────────────────────────────────────────────────────
 // Forgot Password Email Template
-// ─────────────────────────────────────────────────────────────
 /**
  * @param {string} firstName - The user's first name
  * @param {string} resetUrl - The full password reset URL
@@ -259,9 +257,7 @@ export const forgotPasswordTemplate = (firstName, resetUrl) => emailBase(`
   </p>
 `);
 
-// ─────────────────────────────────────────────────────────────
 // Password Reset Confirmation Email Template
-// ─────────────────────────────────────────────────────────────
 /**
  * @param {string} firstName - The user's first name
  * @returns {string} HTML email string
