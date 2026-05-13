@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { signUp, signIn, signOut, forgotPassword, resetPassword } from '../controllers/auth.controller.js';
+import passport from 'passport';
+import { signUp, signIn, signOut, forgotPassword, resetPassword, socialAuthSuccess } from '../controllers/auth.controller.js';
 import { authLimiter } from '../middlewares/limit.middleware.js';
 
 const router = Router();
@@ -18,5 +19,13 @@ router.post('/forgot-password', authLimiter, forgotPassword);
 
 // POST /api/v1/auth/reset-password
 router.post('/reset-password', authLimiter, resetPassword);
+
+// Google Auth
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
+router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/auth?error=google_failed', session: false }), socialAuthSuccess);
+
+// GitHub Auth
+router.get('/github', passport.authenticate('github', { scope: ['user:email'], session: false }));
+router.get('/github/callback', passport.authenticate('github', { failureRedirect: '/auth?error=github_failed', session: false }), socialAuthSuccess);
 
 export default router;

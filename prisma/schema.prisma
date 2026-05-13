@@ -17,7 +17,9 @@ model User {
   id                 String    @id @default(uuid())
   fullName           String
   email              String    @unique
-  password           String
+  password           String?
+  googleId           String?   @unique
+  githubId           String?   @unique
   role               Role      @default(MEMBER)
   resetToken         String?
   resetTokenExpiry   DateTime?

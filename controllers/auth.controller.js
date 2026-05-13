@@ -251,3 +251,30 @@ export const resetPassword = async (req, res, next) => {
         next(error);
     }
 };
+
+// GET /api/v1/auth/social-success
+export const socialAuthSuccess = (req, res) => {
+    if (!req.user) {
+        return res.redirect(`${WEB_URL || 'http://localhost:3000'}/auth?error=auth_failed`);
+    }
+
+    const user = req.user;
+
+    // Sign JWT
+    const token = jwt.sign(
+        { id: user.id, role: user.role },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRY || '7d' }
+    );
+
+    // Set httpOnly cookie
+    res.cookie('ntcogk_token', token, {
+        httpOnly: true,
+        secure: NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+    });
+
+    // Redirect to frontend portal or dashboard
+    res.redirect(`${WEB_URL || 'http://localhost:3000'}/portals/member`);
+};
