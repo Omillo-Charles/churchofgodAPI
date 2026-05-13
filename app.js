@@ -5,6 +5,7 @@ import { PORT, NODE_ENV } from './config/env.js';
 import prisma from './database/postgresql.js';
 import authRoutes from './routes/auth.routes.js';
 import errorMiddleware from './middlewares/error.middleware.js';
+import { generalLimiter } from './middlewares/limit.middleware.js';
 
 const app = express();
 
@@ -12,6 +13,7 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+app.use(generalLimiter);
 
 // Allow Next.js frontend to make credentialed requests
 app.use((req, res, next) => {
