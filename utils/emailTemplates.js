@@ -283,3 +283,34 @@ export const feedbackTemplate = ({ name, email, subject, message }) => emailBase
     This feedback was submitted via the NTCOGK Member Portal. You can reply directly to the member by clicking reply on this email.
   </p>
 `);
+
+// Prayer Request Template
+/**
+ * @param {object} details - The prayer request details { name, email, subject, details, isUrgent }
+ * @returns {string} HTML email string
+ */
+export const prayerRequestTemplate = ({ name, email, subject, details, isUrgent }) => emailBase(`
+  <p class="greeting">New Prayer Request</p>
+  <p class="subtitle">A member has submitted a request for prayer.</p>
+
+  <div class="divider"></div>
+
+  <p class="body-text"><strong style="color:#ffffff">From:</strong> ${name} (${email})</p>
+  <p class="body-text"><strong style="color:#ffffff">Topic:</strong> ${subject}</p>
+  
+  ${isUrgent ? `
+    <div style="display:inline-block; background:rgba(225,29,72,0.1); border:1px solid rgba(225,29,72,0.2); border-radius:8px; padding:4px 12px; margin-bottom:16px;">
+      <span style="color:#fb7185; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">⚠️ Urgent Request</span>
+    </div>
+  ` : ''}
+
+  <div class="token-box" style="background:rgba(255,255,255,0.02); border-color:rgba(255,255,255,0.1); color:#e4e4e7;">
+    ${details}
+  </div>
+
+  <div class="divider"></div>
+
+  <p class="warning-text">
+    This request was submitted via the NTCOGK Member Portal. Our clergy will be notified to lift this up in prayer.
+  </p>
+`);
