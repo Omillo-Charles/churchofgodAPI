@@ -21,6 +21,12 @@ model User {
   googleId           String?   @unique
   githubId           String?   @unique
   role               Role      @default(MEMBER)
+  phone              String?
+  homeCounty         String?
+  churchName         String?
+  ministry           String?
+  address            String?
+  bio                String?
   resetToken         String?
   resetTokenExpiry   DateTime?
   createdAt          DateTime  @default(now())
