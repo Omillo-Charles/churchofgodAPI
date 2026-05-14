@@ -6,6 +6,7 @@ import './config/passport.js';
 import { PORT, NODE_ENV } from './config/env.js';
 import prisma from './database/postgresql.js';
 import authRoutes from './routes/auth.routes.js';
+import userRoutes from './routes/user.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import errorMiddleware from './middlewares/error.middleware.js';
 import { generalLimiter } from './middlewares/limit.middleware.js';
@@ -42,6 +43,9 @@ app.get('/api/v1', (req, res) => {
 
 // Auth routes
 app.use('/api/v1/auth', authRoutes);
+
+// User routes
+app.use('/api/v1/users', userRoutes);
 
 // Contact routes
 app.use('/api/v1/contact', contactRoutes);
