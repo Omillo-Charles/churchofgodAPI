@@ -55,22 +55,15 @@ const emailBase = (bodyContent) => /* html */`
       padding: 40px 16px;
     }
 
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 32px;
-    }
-
     .logo-container {
       margin-bottom: 32px;
-      text-align: left;
+      text-align: center;
     }
  
     .logo-img {
-      max-width: 180px;
+      width: 120px;
       height: auto;
-      display: block;
+      display: inline-block;
     }
 
     .card {
@@ -263,5 +256,30 @@ export const passwordResetSuccessTemplate = (firstName) => emailBase(`
   <p class="warning-text">
     If you did not make this change, please contact our support team immediately or secure your account
     by requesting another password reset.
+  </p>
+`);
+
+// Feedback Submission Template
+/**
+ * @param {object} details - The feedback details { name, email, subject, message }
+ * @returns {string} HTML email string
+ */
+export const feedbackTemplate = ({ name, email, subject, message }) => emailBase(`
+  <p class="greeting">New Feedback Received</p>
+  <p class="subtitle">A member has submitted feedback through the portal.</p>
+
+  <div class="divider"></div>
+
+  <p class="body-text"><strong style="color:#ffffff">From:</strong> ${name} (${email})</p>
+  <p class="body-text"><strong style="color:#ffffff">Category:</strong> ${subject}</p>
+  
+  <div class="token-box" style="background:rgba(255,255,255,0.02); border-color:rgba(255,255,255,0.1); color:#e4e4e7;">
+    ${message}
+  </div>
+
+  <div class="divider"></div>
+
+  <p class="warning-text">
+    This feedback was submitted via the NTCOGK Member Portal. You can reply directly to the member by clicking reply on this email.
   </p>
 `);
