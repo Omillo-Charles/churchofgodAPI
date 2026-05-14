@@ -62,31 +62,15 @@ const emailBase = (bodyContent) => /* html */`
       margin-bottom: 32px;
     }
 
-    .logo-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 12px;
-      padding: 8px 14px;
+    .logo-container {
+      margin-bottom: 32px;
+      text-align: left;
     }
-
-    .logo-text {
-      font-family: 'Ubuntu', sans-serif;
-      font-weight: 700;
-      font-size: 13px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #ffffff;
-    }
-
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: #f59e0b;
-      display: inline-block;
+ 
+    .logo-img {
+      max-width: 180px;
+      height: auto;
+      display: block;
     }
 
     .card {
@@ -201,11 +185,8 @@ const emailBase = (bodyContent) => /* html */`
   <div class="wrapper">
 
     <!-- Header -->
-    <div class="header">
-      <div class="logo-badge">
-        <span class="dot"></span>
-        <span class="logo-text">NTCOGK Portal</span>
-      </div>
+    <div class="logo-container">
+      <img src="https://res.cloudinary.com/dtsa39r1g/image/upload/FIDEL_CHURCH_dyinay.png" alt="NTCOGK Logo" class="logo-img">
     </div>
 
     <!-- Card -->
