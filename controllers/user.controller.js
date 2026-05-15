@@ -78,3 +78,24 @@ export const updateProfile = async (req, res, next) => {
         next(error);
     }
 };
+
+// DELETE /api/v1/users/me
+export const deleteAccount = async (req, res, next) => {
+    try {
+        // Delete user from database
+        await prisma.user.delete({
+            where: { id: req.user.id },
+        });
+
+        // Clear cookies
+        res.clearCookie('jwt');
+        res.clearCookie('connect.sid'); // If using sessions
+
+        res.status(200).json({
+            success: true,
+            message: 'Account deleted successfully.',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
