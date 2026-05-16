@@ -10,6 +10,7 @@ import userRoutes from './routes/user.routes.js';
 import feedbackRoutes from './routes/feedback.routes.js';
 import prayerRoutes from './routes/prayer.routes.js';
 import contactRoutes from './routes/contact.routes.js';
+import mpesaRoutes from './routes/mpesa.routes.js';
 import errorMiddleware from './middlewares/error.middleware.js';
 import { generalLimiter } from './middlewares/limit.middleware.js';
 
@@ -57,6 +58,9 @@ app.use('/api/v1/prayer', prayerRoutes);
 
 // Contact routes
 app.use('/api/v1/contact', contactRoutes);
+
+// M-Pesa Payment routes
+app.use('/api/v1/payments', mpesaRoutes);
 
 // Error middleware
 app.use(errorMiddleware);

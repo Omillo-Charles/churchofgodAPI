@@ -80,6 +80,7 @@ model EventRegistration {
   emergencyPhone String?
   emergencyEmail String?
   paymentStatus  PaymentStatus  @default(PENDING)
+  checkoutRequestId String?
   status         RegistrationStatus @default(PENDING)
   amountPaid     Float          @default(0)
   createdAt      DateTime       @default(now())
