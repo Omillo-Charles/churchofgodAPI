@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import passport from 'passport';
-import { signUp, signIn, signOut, forgotPassword, resetPassword, socialAuthSuccess } from '../controllers/auth.controller.js';
+import { signUp, signIn, signOut, forgotPassword, resetPassword, socialAuthSuccess, verifyOTP, resendOTP } from '../controllers/auth.controller.js';
 import { authLimiter } from '../middlewares/limit.middleware.js';
 import { validate } from '../middlewares/validate.js';
 import { signupSchema, signinSchema } from '../validations/auth.validation.js';
@@ -12,6 +12,12 @@ router.post('/signup', authLimiter, validate(signupSchema), signUp);
 
 // POST /api/v1/auth/signin
 router.post('/signin', authLimiter, validate(signinSchema), signIn);
+
+// POST /api/v1/auth/verify-otp
+router.post('/verify-otp', authLimiter, verifyOTP);
+
+// POST /api/v1/auth/resend-otp
+router.post('/resend-otp', authLimiter, resendOTP);
 
 // POST /api/v1/auth/signout
 router.post('/signout', signOut);

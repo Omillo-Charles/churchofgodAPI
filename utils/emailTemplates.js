@@ -314,3 +314,32 @@ export const prayerRequestTemplate = ({ name, email, subject, details, isUrgent 
     This request was submitted via the NTCOGK Member Portal. Our clergy will be notified to lift this up in prayer.
   </p>
 `);
+
+// OTP Verification Template
+/**
+ * @param {string} firstName - The user's first name
+ * @param {string} otp - The 6-digit verification code
+ * @returns {string} HTML email string
+ */
+export const otpTemplate = (firstName, otp) => emailBase(`
+  <p class="greeting">Verify your account</p>
+  <p class="subtitle">Thank you for joining the NTCOGK digital community. Please use the code below to complete your registration.</p>
+
+  <div class="divider"></div>
+
+  <p class="body-text">Hi ${firstName},</p>
+  <p class="body-text">Enter the following 6-digit verification code on the portal to activate your account. This code will expire in <strong style="color:#ffffff">10 minutes</strong>.</p>
+
+  <div style="text-align: center; margin: 32px 0;">
+    <div style="display: inline-block; background: #ffffff; color: #09090b; font-family: 'Ubuntu', sans-serif; font-weight: 900; font-size: 32px; letter-spacing: 0.2em; padding: 16px 40px; border-radius: 16px;">
+      ${otp}
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <p class="warning-text">
+    If you did not request this code, you can safely ignore this email. Someone may have entered your email address by mistake.
+    For your security, never share this code with anyone.
+  </p>
+`);

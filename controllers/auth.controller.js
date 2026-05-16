@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import prisma from '../database/postgresql.js';
 import { JWT_SECRET, JWT_EXPIRY, NODE_ENV, WEB_URL } from '../config/env.js';
 import { sendEmail } from '../utils/mailer.js';
-import { forgotPasswordTemplate, passwordResetSuccessTemplate } from '../utils/emailTemplates.js';
+import { forgotPasswordTemplate, passwordResetSuccessTemplate, otpTemplate } from '../utils/emailTemplates.js';
 
 // POST /api/v1/auth/signup
 export const signUp = async (req, res, next) => {
@@ -29,6 +29,30 @@ export const signUp = async (req, res, next) => {
         // Check if user already exists
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
+            // If user exists but is not verified, we can resend OTP
+            if (!existingUser.isVerified) {
+                const otp = Math.floor(100000 + Math.random() * 900000).toString();
+                const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+                await prisma.user.update({
+                    where: { email },
+                    data: { otp, otpExpiry }
+                });
+
+                const firstName = existingUser.fullName.split(' ')[0];
+                await sendEmail({
+                    to: email,
+                    subject: 'Verify your NTCOGK Portal account',
+                    html: otpTemplate(firstName, otp),
+                });
+
+                return res.status(200).json({
+                    success: true,
+                    message: 'Account already exists but is unverified. A new OTP has been sent to your email.',
+                    needsVerification: true
+                });
+            }
+
             return res.status(409).json({
                 success: false,
                 message: 'An account with this email already exists.',
@@ -38,12 +62,19 @@ export const signUp = async (req, res, next) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        // Create user
+        // Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        // Create user (unverified)
         const user = await prisma.user.create({
             data: {
                 fullName,
                 email,
                 password: hashedPassword,
+                otp,
+                otpExpiry,
+                isVerified: false
             },
             select: {
                 id: true,
@@ -54,9 +85,18 @@ export const signUp = async (req, res, next) => {
             },
         });
 
+        // Send OTP Email
+        const firstName = fullName.split(' ')[0];
+        await sendEmail({
+            to: email,
+            subject: 'Verify your NTCOGK Portal account',
+            html: otpTemplate(firstName, otp),
+        });
+
         return res.status(201).json({
             success: true,
-            message: 'Account created successfully! Please sign in.',
+            message: 'Account created! Please enter the OTP sent to your email.',
+            needsVerification: true,
             user,
         });
     } catch (error) {
@@ -91,6 +131,15 @@ export const signIn = async (req, res, next) => {
             return res.status(401).json({
                 success: false,
                 message: 'Invalid email or password.',
+            });
+        }
+
+        // Check if verified
+        if (!user.isVerified) {
+            return res.status(403).json({
+                success: false,
+                message: 'Please verify your email address before signing in.',
+                needsVerification: true
             });
         }
 
@@ -252,13 +301,126 @@ export const resetPassword = async (req, res, next) => {
     }
 };
 
+// POST /api/v1/auth/verify-otp
+export const verifyOTP = async (req, res, next) => {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+        return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
+    }
+
+    try {
+        const user = await prisma.user.findUnique({ where: { email } });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        if (user.isVerified) {
+            return res.status(400).json({ success: false, message: 'Account is already verified.' });
+        }
+
+        if (user.otp !== otp || user.otpExpiry < new Date()) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
+        }
+
+        // Mark as verified and clear OTP
+        const updatedUser = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                isVerified: true,
+                otp: null,
+                otpExpiry: null
+            }
+        });
+
+        // Sign JWT (auto-login after verification)
+        const token = jwt.sign(
+            { id: updatedUser.id, role: updatedUser.role },
+            JWT_SECRET,
+            { expiresIn: JWT_EXPIRY || '7d' }
+        );
+
+        res.cookie('ntcogk_token', token, {
+            httpOnly: true,
+            secure: NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Email verified successfully!',
+            user: {
+                id: updatedUser.id,
+                fullName: updatedUser.fullName,
+                email: updatedUser.email,
+                role: updatedUser.role,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// POST /api/v1/auth/resend-otp
+export const resendOTP = async (req, res, next) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    try {
+        const user = await prisma.user.findUnique({ where: { email } });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        if (user.isVerified) {
+            return res.status(400).json({ success: false, message: 'Account is already verified.' });
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { otp, otpExpiry }
+        });
+
+        const firstName = user.fullName.split(' ')[0];
+        await sendEmail({
+            to: email,
+            subject: 'Your new NTCOGK verification code',
+            html: otpTemplate(firstName, otp),
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'A new OTP has been sent to your email.',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // GET /api/v1/auth/social-success
-export const socialAuthSuccess = (req, res) => {
+export const socialAuthSuccess = async (req, res) => {
     if (!req.user) {
         return res.redirect(`${WEB_URL || 'http://localhost:3000'}/auth?error=auth_failed`);
     }
 
     const user = req.user;
+
+    // Social users are auto-verified
+    if (!user.isVerified) {
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { isVerified: true }
+        });
+    }
 
     // Sign JWT
     const token = jwt.sign(

@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config/env.js';
+import prisma from '../database/postgresql.js';
 
-export const isAuthenticated = (req, res, next) => {
+export const isAuthenticated = async (req, res, next) => {
     const token = req.cookies.ntcogk_token;
 
     if (!token) {
@@ -13,9 +14,22 @@ export const isAuthenticated = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded;
+        
+        // Verify if user still exists in database
+        const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+        
+        if (!user) {
+            res.clearCookie('ntcogk_token');
+            return res.status(401).json({
+                success: false,
+                message: 'User account no longer exists. Please log in again.',
+            });
+        }
+
+        req.user = user; // Attach full user object
         next();
     } catch (error) {
+        res.clearCookie('ntcogk_token');
         return res.status(401).json({
             success: false,
             message: 'Invalid or expired token. Please log in again.',
