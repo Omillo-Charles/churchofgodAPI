@@ -19,8 +19,13 @@ export const createEvent = async (req, res, next) => {
 
         // Upload the image from memory buffer to Cloudinary if provided
         if (req.file) {
-            const uploadResult = await uploadBufferToCloudinary(req.file.buffer, 'events');
-            imageUrl = uploadResult.url;
+            try {
+                const uploadResult = await uploadBufferToCloudinary(req.file.buffer, 'events');
+                imageUrl = uploadResult.url;
+            } catch (uploadError) {
+                console.warn('Cloudinary upload failed, using default fallback image:', uploadError.message);
+                imageUrl = '/youthexplosionszn3.jpeg';
+            }
         }
 
         // Create the event record in the database
@@ -115,17 +120,24 @@ export const updateEvent = async (req, res, next) => {
 
         // If a new image is uploaded, upload to Cloudinary and replace the old one
         if (req.file) {
-            const uploadResult = await uploadBufferToCloudinary(req.file.buffer, 'events');
-            imageUrl = uploadResult.url;
+            try {
+                const uploadResult = await uploadBufferToCloudinary(req.file.buffer, 'events');
+                imageUrl = uploadResult.url;
 
-            // Extract public ID from the previous image URL to clean it up
-            if (existingEvent.imageUrl) {
-                const parts = existingEvent.imageUrl.split('/');
-                const fileName = parts[parts.length - 1];
-                const publicId = `events/${fileName.split('.')[0]}`;
-                await deleteFromCloudinary(publicId).catch(err => 
-                    console.error('Failed to delete old Cloudinary image:', err.message)
-                );
+                // Extract public ID from the previous image URL to clean it up
+                if (existingEvent.imageUrl) {
+                    const parts = existingEvent.imageUrl.split('/');
+                    const fileName = parts[parts.length - 1];
+                    const publicId = `events/${fileName.split('.')[0]}`;
+                    await deleteFromCloudinary(publicId).catch(err => 
+                        console.error('Failed to delete old Cloudinary image:', err.message)
+                    );
+                }
+            } catch (uploadError) {
+                console.warn('Cloudinary upload failed during update, using fallback:', uploadError.message);
+                if (!imageUrl) {
+                    imageUrl = '/youthexplosionszn3.jpeg';
+                }
             }
         }
 
