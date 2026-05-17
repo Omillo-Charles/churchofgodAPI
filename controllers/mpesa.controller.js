@@ -45,7 +45,10 @@ export const initiateSTKPush = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Event not found.' });
         }
 
-        // Create the registration in PENDING state before payment is confirmed
+        // Check if this is a free registration
+        const isFree = parseFloat(amount) === 0;
+
+        // Create the registration in PENDING or CONFIRMED state
         const registration = await prisma.eventRegistration.create({
             data: {
                 eventId,
@@ -61,11 +64,20 @@ export const initiateSTKPush = async (req, res, next) => {
                 emergencyName:  emergencyName  || null,
                 emergencyPhone: emergencyPhone || null,
                 emergencyEmail: emergencyEmail || null,
-                paymentStatus: 'PENDING',
-                status:        'PENDING',
+                paymentStatus: isFree ? 'COMPLETED' : 'PENDING',
+                status:        isFree ? 'CONFIRMED' : 'PENDING',
                 amountPaid:    0,
             },
         });
+
+        // Bypasses STK push and returns immediately if event is free
+        if (isFree) {
+            return res.status(200).json({
+                success:        true,
+                message:        'Registration successful! See you at the event.',
+                registrationId: registration.id,
+            });
+        }
 
         // Prepare STK push payload
         const formattedPhone = formatPhoneNumber(phone);
