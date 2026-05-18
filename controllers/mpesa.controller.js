@@ -12,7 +12,6 @@ const MPESA_BASE_URL = NODE_ENV === 'production'
 export const initiateSTKPush = async (req, res, next) => {
     const {
         eventId,
-        amount,
         phone,
         fullName,
         email,
@@ -27,7 +26,7 @@ export const initiateSTKPush = async (req, res, next) => {
     } = req.body;
 
     // Validate required fields
-    const required = { eventId, amount, phone, fullName, email, ageGroup, gender, region, district, churchName };
+    const required = { eventId, phone, fullName, email, ageGroup, gender, region, district, churchName };
     const missing  = Object.keys(required).filter(key => !required[key]);
 
     if (missing.length > 0) {
@@ -45,6 +44,8 @@ export const initiateSTKPush = async (req, res, next) => {
             if (!event) {
                 throw new Error('EVENT_NOT_FOUND');
             }
+
+            const amount = event.fee;
 
             // Check for duplicate registration
             const existingRegistration = await tx.eventRegistration.findFirst({
