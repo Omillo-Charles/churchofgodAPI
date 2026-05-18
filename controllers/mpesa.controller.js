@@ -119,19 +119,65 @@ export const initiateSTKPush = async (req, res, next) => {
                 TransactionDesc:   `Registration – ${event.title}`,
             };
 
-            const response = await fetch(`${MPESA_BASE_URL}/mpesa/stkpush/v1/processrequest`, {
-                method:  'POST',
-                headers: {
-                    Authorization:  `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload),
-            });
+            let response;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
 
-            const data = await response.json();
+            try {
+                response = await fetch(`${MPESA_BASE_URL}/mpesa/stkpush/v1/processrequest`, {
+                    method:  'POST',
+                    headers: {
+                        Authorization:  `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal,
+                });
+            } catch (fetchError) {
+                console.error('STK Push Fetch Exception:', fetchError);
+                if (fetchError.name === 'AbortError') {
+                    throw new Error('STK_PUSH_FAILED:Request to M-Pesa gateway timed out. Please try again.');
+                }
+                throw new Error('STK_PUSH_FAILED:Network error or M-Pesa gateway is currently unreachable. Please try again later.');
+            } finally {
+                clearTimeout(timeoutId);
+            }
+
+            if (!response.ok) {
+                let errorDetails = '';
+                try {
+                    const errorJson = await response.json();
+                    errorDetails = errorJson.errorMessage || errorJson.CustomerMessage || response.statusText;
+                } catch {
+                    errorDetails = response.statusText || `HTTP status ${response.status}`;
+                }
+                console.error(`STK Push Non-200 Response (${response.status}):`, errorDetails);
+                throw new Error(`STK_PUSH_FAILED:M-Pesa gateway returned an error: ${errorDetails}`);
+            }
+
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                console.error('STK Push JSON Parse Error:', jsonError);
+                throw new Error('STK_PUSH_FAILED:Received an invalid or malformed response from the M-Pesa gateway.');
+            }
+
+            // Defensive property validation
+            if (!data || typeof data !== 'object') {
+                console.error('STK Push Empty/Invalid Payload:', data);
+                throw new Error('STK_PUSH_FAILED:Received an empty response from the M-Pesa gateway.');
+            }
 
             if (data.ResponseCode !== '0') {
-                throw new Error(`STK_PUSH_FAILED:${data.CustomerMessage || 'Failed to initiate STK Push.'}`);
+                const failureMsg = data.CustomerMessage || data.ResponseDescription || 'Failed to initiate STK Push.';
+                console.error('STK Push Refusal Code:', data.ResponseCode, failureMsg);
+                throw new Error(`STK_PUSH_FAILED:${failureMsg}`);
+            }
+
+            if (!data.CheckoutRequestID) {
+                console.error('STK Push Response Missing CheckoutRequestID:', data);
+                throw new Error('STK_PUSH_FAILED:Missing checkout transaction reference from the M-Pesa gateway.');
             }
 
             // Persist Safaricom's CheckoutRequestID so the callback can resolve this registration
