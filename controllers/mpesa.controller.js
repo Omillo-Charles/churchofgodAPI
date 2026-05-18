@@ -238,6 +238,63 @@ export const initiateSTKPush = async (req, res, next) => {
     }
 };
 
+// Safely updates payment and registration status enforcing atomic state machine transitions
+export const updatePaymentStatus = async (registrationId, targetPaymentStatus, targetStatus, additionalData = {}, tx = prisma) => {
+    return await tx.$transaction(async (innerTx) => {
+        const registration = await innerTx.eventRegistration.findUnique({
+            where: { id: registrationId },
+        });
+
+        if (!registration) {
+            console.warn(`[State Transition] Registration ${registrationId} not found.`);
+            return null;
+        }
+
+        const currentPaymentStatus = registration.paymentStatus;
+        const currentStatus = registration.status;
+
+        // If already in target states, return (idempotency check)
+        if (currentPaymentStatus === targetPaymentStatus && currentStatus === targetStatus) {
+            return registration;
+        }
+
+        // 1. If currently COMPLETED, reject further updates
+        if (currentPaymentStatus === 'COMPLETED') {
+            console.warn(`[State Transition] Rejected invalid transition from COMPLETED to ${targetPaymentStatus} for registration ${registrationId}.`);
+            return registration;
+        }
+
+        // 2. If currently FAILED, reject further updates
+        if (currentPaymentStatus === 'FAILED') {
+            console.warn(`[State Transition] Rejected invalid transition from FAILED to ${targetPaymentStatus} for registration ${registrationId}.`);
+            return registration;
+        }
+
+        // 3. Only PENDING can transition to COMPLETED or FAILED
+        if (currentPaymentStatus !== 'PENDING') {
+            console.warn(`[State Transition] Rejected transition from ${currentPaymentStatus} for registration ${registrationId}.`);
+            return registration;
+        }
+
+        // Enforce registration status logic
+        let finalStatus = targetStatus;
+        if (targetPaymentStatus === 'COMPLETED') {
+            finalStatus = 'CONFIRMED';
+        } else if (targetPaymentStatus === 'FAILED') {
+            finalStatus = 'PENDING';
+        }
+
+        return await innerTx.eventRegistration.update({
+            where: { id: registrationId },
+            data: {
+                paymentStatus: targetPaymentStatus,
+                status:        finalStatus,
+                ...additionalData,
+            },
+        });
+    });
+};
+
 // POST /api/v1/payments/callback
 // Receives Safaricom's async webhook and updates the registration's payment status
 export const mpesaCallback = async (req, res, next) => {
@@ -279,24 +336,25 @@ export const mpesaCallback = async (req, res, next) => {
 
             console.log(`Payment successful. Receipt: ${receiptNo}, Amount: ${amountPaid}`);
 
-            await prisma.eventRegistration.update({
-                where: { id: registration.id },
-                data:  {
-                    paymentStatus:  'COMPLETED',
-                    status:         'CONFIRMED',
+            await updatePaymentStatus(
+                registration.id,
+                'COMPLETED',
+                'CONFIRMED',
+                {
                     amountPaid:     parseFloat(amountPaid),
                     mpesaReceiptNo: receiptNo || null,
                     paidAt:         new Date(),
-                },
-            });
+                }
+            );
         } else {
             // Payment was cancelled or failed
             console.log(`Payment failed. Code: ${ResultCode}, Reason: ${ResultDesc}`);
 
-            await prisma.eventRegistration.update({
-                where: { id: registration.id },
-                data:  { paymentStatus: 'FAILED' },
-            });
+            await updatePaymentStatus(
+                registration.id,
+                'FAILED',
+                'PENDING'
+            );
         }
     } catch (error) {
         // Do not call next(error) — a 200 was already sent to Safaricom above
