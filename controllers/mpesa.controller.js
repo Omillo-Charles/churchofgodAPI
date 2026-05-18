@@ -299,6 +299,30 @@ export const updatePaymentStatus = async (registrationId, targetPaymentStatus, t
 // Receives Safaricom's async webhook and updates the registration's payment status
 export const mpesaCallback = async (req, res, next) => {
     try {
+        // Extract client IP address securely, handling reverse proxies
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || req.ip || '';
+
+        // Official Safaricom Daraja Webhook IP Ranges/Subnets
+        const TRUSTED_SAFARICOM_IPS = [
+            '196.201.214.',  // Matches 196.201.214.X (e.g., .200 to .211)
+            '196.201.213.114',
+            '196.19.16.9',
+            '196.201.212.74',
+            '196.201.212.'   // Matches 196.201.212.X (e.g., .129 to .138)
+        ];
+
+        const isTrusted = 
+            NODE_ENV !== 'production' || 
+            clientIp === '127.0.0.1' || 
+            clientIp === '::1' || 
+            clientIp === '::ffff:127.0.0.1' ||
+            TRUSTED_SAFARICOM_IPS.some(trusted => clientIp.startsWith(trusted));
+
+        if (!isTrusted) {
+            console.warn(`[Security] Rejected unauthorized callback attempt from IP: ${clientIp}`);
+            return res.status(403).json({ success: false, message: 'Forbidden. Untrusted callback origin.' });
+        }
+
         console.log('M-Pesa Callback received:', JSON.stringify(req.body, null, 2));
 
         const callbackData = req.body?.Body?.stkCallback;
