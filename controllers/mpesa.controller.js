@@ -45,6 +45,24 @@ export const initiateSTKPush = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Event not found.' });
         }
 
+        // Check for duplicate registration
+        const existingRegistration = await prisma.eventRegistration.findFirst({
+            where: {
+                eventId,
+                email,
+                paymentStatus: {
+                    in: ['PENDING', 'COMPLETED'],
+                },
+            },
+        });
+
+        if (existingRegistration) {
+            return res.status(409).json({
+                success: false,
+                message: 'You have already registered for this event. Please complete your pending payment or contact church support for assistance.',
+            });
+        }
+
         // Check if this is a free registration
         const isFree = parseFloat(amount) === 0;
 
