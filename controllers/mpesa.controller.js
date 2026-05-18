@@ -205,6 +205,12 @@ export const mpesaCallback = async (req, res, next) => {
             return;
         }
 
+        // Idempotency check: prevent duplicate callback processing
+        if (registration.paymentStatus === 'COMPLETED') {
+            console.log(`Payment already processed. Registration ${registration.id} is COMPLETED. Ignoring duplicate callback.`);
+            return;
+        }
+
         if (Number(ResultCode) === 0) {
             // Payment succeeded — extract receipt details from the metadata array
             const items       = callbackData.CallbackMetadata?.Item ?? [];
