@@ -195,6 +195,16 @@ export const mpesaCallback = async (req, res, next) => {
         // Respond immediately — Safaricom will retry if it does not receive a 200 quickly
         res.status(200).json({ success: true, message: 'Callback received.' });
 
+        // Find the registration by unique checkoutRequestId
+        const registration = await prisma.eventRegistration.findUnique({
+            where: { checkoutRequestId: CheckoutRequestID },
+        });
+
+        if (!registration) {
+            console.log(`Registration with checkoutRequestId ${CheckoutRequestID} not found.`);
+            return;
+        }
+
         if (Number(ResultCode) === 0) {
             // Payment succeeded — extract receipt details from the metadata array
             const items       = callbackData.CallbackMetadata?.Item ?? [];
@@ -203,8 +213,8 @@ export const mpesaCallback = async (req, res, next) => {
 
             console.log(`Payment successful. Receipt: ${receiptNo}, Amount: ${amountPaid}`);
 
-            await prisma.eventRegistration.updateMany({
-                where: { checkoutRequestId: CheckoutRequestID },
+            await prisma.eventRegistration.update({
+                where: { id: registration.id },
                 data:  {
                     paymentStatus: 'COMPLETED',
                     status:        'CONFIRMED',
@@ -215,8 +225,8 @@ export const mpesaCallback = async (req, res, next) => {
             // Payment was cancelled or failed
             console.log(`Payment failed. Code: ${ResultCode}, Reason: ${ResultDesc}`);
 
-            await prisma.eventRegistration.updateMany({
-                where: { checkoutRequestId: CheckoutRequestID },
+            await prisma.eventRegistration.update({
+                where: { id: registration.id },
                 data:  { paymentStatus: 'FAILED' },
             });
         }
