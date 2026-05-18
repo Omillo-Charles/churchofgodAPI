@@ -94,6 +94,13 @@ export const initiateSTKPush = async (req, res, next) => {
 
             // Prepare STK push payload
             const formattedPhone = formatPhoneNumber(phone);
+
+            // Validate formatted phone number (Kenyan format: 2547XXXXXXXX or 2541XXXXXXXX)
+            const isValidKenyanPhone = /^254[17]\d{8}$/.test(formattedPhone);
+            if (!isValidKenyanPhone) {
+                throw new Error('INVALID_PHONE_NUMBER');
+            }
+
             const timestamp      = getTimestamp();
             const password       = generatePassword(timestamp);
             const accessToken    = await getMpesaAccessToken();
@@ -165,6 +172,12 @@ export const initiateSTKPush = async (req, res, next) => {
             return res.status(409).json({
                 success: false,
                 message: 'You have already registered for this event. Please complete your pending payment or contact church support for assistance.',
+            });
+        }
+        if (error.message === 'INVALID_PHONE_NUMBER' || error.message.includes('Invalid phone number')) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide a valid Kenyan mobile number (e.g., 2547XXXXXXXX).',
             });
         }
         if (error.message.startsWith('STK_PUSH_FAILED:')) {
