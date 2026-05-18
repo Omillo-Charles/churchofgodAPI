@@ -223,9 +223,11 @@ export const mpesaCallback = async (req, res, next) => {
             await prisma.eventRegistration.update({
                 where: { id: registration.id },
                 data:  {
-                    paymentStatus: 'COMPLETED',
-                    status:        'CONFIRMED',
-                    amountPaid:    parseFloat(amountPaid),
+                    paymentStatus:  'COMPLETED',
+                    status:         'CONFIRMED',
+                    amountPaid:     parseFloat(amountPaid),
+                    mpesaReceiptNo: receiptNo || null,
+                    paidAt:         new Date(),
                 },
             });
         } else {

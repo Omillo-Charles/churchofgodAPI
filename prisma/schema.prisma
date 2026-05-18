@@ -81,6 +81,8 @@ model EventRegistration {
   emergencyEmail String?
   paymentStatus  PaymentStatus  @default(PENDING)
   checkoutRequestId String?        @unique
+  mpesaReceiptNo String?        @unique
+  paidAt         DateTime?
   status         RegistrationStatus @default(PENDING)
   amountPaid     Float          @default(0)
   createdAt      DateTime       @default(now())
