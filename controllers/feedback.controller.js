@@ -3,10 +3,9 @@ import { feedbackTemplate } from '../utils/emailTemplates.js';
 import { EMAIL_USER } from '../config/env.js';
 import prisma from '../database/postgresql.js';
 
-/**
- * Handles the submission of member feedback.
- * Sends an email to the church administration.
- */
+
+// Handles the submission of member feedback.
+// Sends an email to the church administration.
 export const submitFeedback = async (req, res, next) => {
     const { subject, message } = req.body;
     const userId = req.user.id;

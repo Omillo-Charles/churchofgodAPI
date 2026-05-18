@@ -155,7 +155,7 @@ export const mpesaCallback = async (req, res, next) => {
         // Respond immediately — Safaricom will retry if it does not receive a 200 quickly
         res.status(200).json({ success: true, message: 'Callback received.' });
 
-        if (ResultCode === 0) {
+        if (Number(ResultCode) === 0) {
             // Payment succeeded — extract receipt details from the metadata array
             const items       = callbackData.CallbackMetadata?.Item ?? [];
             const amountPaid  = items.find(i => i.Name === 'Amount')?.Value  ?? 0;
