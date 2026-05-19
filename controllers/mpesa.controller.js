@@ -302,13 +302,12 @@ export const mpesaCallback = async (req, res, next) => {
         // Extract client IP address securely, handling reverse proxies
         const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || req.ip || '';
 
-        // Official Safaricom Daraja Webhook IP Ranges/Subnets
+        // Official Safaricom Daraja Webhook IP Ranges/Subnets (full /24 subnets)
         const TRUSTED_SAFARICOM_IPS = [
-            '196.201.214.',  // Matches 196.201.214.X (e.g., .200 to .211)
-            '196.201.213.114',
-            '196.19.16.9',
-            '196.201.212.74',
-            '196.201.212.'   // Matches 196.201.212.X (e.g., .129 to .138)
+            '196.201.212.',  // Matches 196.201.212.X (sandbox & production ranges)
+            '196.201.213.',  // Matches 196.201.213.X (sandbox & production ranges)
+            '196.201.214.',  // Matches 196.201.214.X (sandbox & production ranges)
+            '196.19.16.'     // Matches 196.19.16.X (sandbox & production ranges)
         ];
 
         const isTrusted = 
