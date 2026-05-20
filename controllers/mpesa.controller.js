@@ -283,6 +283,7 @@ export const initiateSTKPush = async (req, res, next) => {
 // Prisma would throw an error or cause deadlocks when trying to nest transactions on the same client.
 // Transaction ownership and atomicity is now fully delegated to the caller via the `tx` parameter.
 export const updatePaymentStatus = async (registrationId, targetPaymentStatus, targetStatus, additionalData = {}, tx = prisma) => {
+    // Initial read for fast-path validation and logging
     const registration = await tx.eventRegistration.findUnique({
         where: { id: registrationId },
     });
@@ -295,25 +296,20 @@ export const updatePaymentStatus = async (registrationId, targetPaymentStatus, t
     const currentPaymentStatus = registration.paymentStatus;
     const currentStatus = registration.status;
 
-    // If already in target states, return (idempotency check)
     if (currentPaymentStatus === targetPaymentStatus && currentStatus === targetStatus) {
         return registration;
     }
 
-    // 1. If currently COMPLETED, reject further updates — final state
     if (currentPaymentStatus === 'COMPLETED') {
         console.warn(`[State Transition] Rejected invalid transition from COMPLETED to ${targetPaymentStatus} for registration ${registrationId}.`);
         return registration;
     }
 
-    // 2. FAILED can only be reset back to PENDING (via retry flow), nothing else
     if (currentPaymentStatus === 'FAILED' && targetPaymentStatus !== 'PENDING') {
         console.warn(`[State Transition] Rejected transition from FAILED to ${targetPaymentStatus} for registration ${registrationId}.`);
         return registration;
     }
 
-    // 3. PENDING or FAILED (resetting to PENDING) are valid — proceed
-    // Enforce registration status logic
     let finalStatus = targetStatus;
     if (targetPaymentStatus === 'COMPLETED') {
         finalStatus = 'CONFIRMED';
@@ -321,14 +317,28 @@ export const updatePaymentStatus = async (registrationId, targetPaymentStatus, t
         finalStatus = 'PENDING';
     }
 
-    return await tx.eventRegistration.update({
-        where: { id: registrationId },
+    // Atomic update protection: ensure the row is only updated if it is NOT already COMPLETED.
+    // This guarantees idempotency and prevents race conditions from simultaneous duplicate callbacks.
+    // If another callback already finalized the payment, this query will securely return { count: 0 } (no-op).
+    const result = await tx.eventRegistration.updateMany({
+        where: { 
+            id: registrationId,
+            paymentStatus: { not: 'COMPLETED' }, // Atomic lock out condition
+        },
         data: {
             paymentStatus: targetPaymentStatus,
             status:        finalStatus,
             ...additionalData,
         },
     });
+
+    if (result.count === 0) {
+        console.warn(`[State Transition] Atomic update failed. Registration ${registrationId} was already finalized concurrently.`);
+        return registration; // Return the initially fetched state
+    }
+
+    // Return the updated registration to preserve API behavior
+    return await tx.eventRegistration.findUnique({ where: { id: registrationId } });
 };
 
 // POST /api/v1/payments/callback
@@ -381,11 +391,9 @@ export const mpesaCallback = async (req, res, next) => {
             return;
         }
 
-        // Idempotency check: prevent duplicate callback processing
-        if (registration.paymentStatus === 'COMPLETED') {
-            console.log(`Payment already processed. Registration ${registration.id} is COMPLETED. Ignoring duplicate callback.`);
-            return;
-        }
+        // Note: We removed the read-only idempotency check `if (registration.paymentStatus === 'COMPLETED')`
+        // here because it's not concurrency-safe. It has been replaced by an atomic `updateMany`
+        // inside `updatePaymentStatus()` to safely discard duplicate concurrent callbacks.
 
         if (Number(ResultCode) === 0) {
             // Payment succeeded — extract receipt details from the metadata array
