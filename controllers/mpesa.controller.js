@@ -237,54 +237,56 @@ export const initiateSTKPush = async (req, res, next) => {
 };
 
 // Safely updates payment and registration status enforcing atomic state machine transitions
+// Note: Removed internal tx.$transaction() block to prevent nested transaction errors.
+// Since this function can be called within an existing Prisma transaction context,
+// Prisma would throw an error or cause deadlocks when trying to nest transactions on the same client.
+// Transaction ownership and atomicity is now fully delegated to the caller via the `tx` parameter.
 export const updatePaymentStatus = async (registrationId, targetPaymentStatus, targetStatus, additionalData = {}, tx = prisma) => {
-    return await tx.$transaction(async (innerTx) => {
-        const registration = await innerTx.eventRegistration.findUnique({
-            where: { id: registrationId },
-        });
+    const registration = await tx.eventRegistration.findUnique({
+        where: { id: registrationId },
+    });
 
-        if (!registration) {
-            console.warn(`[State Transition] Registration ${registrationId} not found.`);
-            return null;
-        }
+    if (!registration) {
+        console.warn(`[State Transition] Registration ${registrationId} not found.`);
+        return null;
+    }
 
-        const currentPaymentStatus = registration.paymentStatus;
-        const currentStatus = registration.status;
+    const currentPaymentStatus = registration.paymentStatus;
+    const currentStatus = registration.status;
 
-        // If already in target states, return (idempotency check)
-        if (currentPaymentStatus === targetPaymentStatus && currentStatus === targetStatus) {
-            return registration;
-        }
+    // If already in target states, return (idempotency check)
+    if (currentPaymentStatus === targetPaymentStatus && currentStatus === targetStatus) {
+        return registration;
+    }
 
-        // 1. If currently COMPLETED, reject further updates — final state
-        if (currentPaymentStatus === 'COMPLETED') {
-            console.warn(`[State Transition] Rejected invalid transition from COMPLETED to ${targetPaymentStatus} for registration ${registrationId}.`);
-            return registration;
-        }
+    // 1. If currently COMPLETED, reject further updates — final state
+    if (currentPaymentStatus === 'COMPLETED') {
+        console.warn(`[State Transition] Rejected invalid transition from COMPLETED to ${targetPaymentStatus} for registration ${registrationId}.`);
+        return registration;
+    }
 
-        // 2. FAILED can only be reset back to PENDING (via retry flow), nothing else
-        if (currentPaymentStatus === 'FAILED' && targetPaymentStatus !== 'PENDING') {
-            console.warn(`[State Transition] Rejected transition from FAILED to ${targetPaymentStatus} for registration ${registrationId}.`);
-            return registration;
-        }
+    // 2. FAILED can only be reset back to PENDING (via retry flow), nothing else
+    if (currentPaymentStatus === 'FAILED' && targetPaymentStatus !== 'PENDING') {
+        console.warn(`[State Transition] Rejected transition from FAILED to ${targetPaymentStatus} for registration ${registrationId}.`);
+        return registration;
+    }
 
-        // 3. PENDING or FAILED (resetting to PENDING) are valid — proceed
-        // Enforce registration status logic
-        let finalStatus = targetStatus;
-        if (targetPaymentStatus === 'COMPLETED') {
-            finalStatus = 'CONFIRMED';
-        } else if (targetPaymentStatus === 'FAILED' || targetPaymentStatus === 'PENDING') {
-            finalStatus = 'PENDING';
-        }
+    // 3. PENDING or FAILED (resetting to PENDING) are valid — proceed
+    // Enforce registration status logic
+    let finalStatus = targetStatus;
+    if (targetPaymentStatus === 'COMPLETED') {
+        finalStatus = 'CONFIRMED';
+    } else if (targetPaymentStatus === 'FAILED' || targetPaymentStatus === 'PENDING') {
+        finalStatus = 'PENDING';
+    }
 
-        return await innerTx.eventRegistration.update({
-            where: { id: registrationId },
-            data: {
-                paymentStatus: targetPaymentStatus,
-                status:        finalStatus,
-                ...additionalData,
-            },
-        });
+    return await tx.eventRegistration.update({
+        where: { id: registrationId },
+        data: {
+            paymentStatus: targetPaymentStatus,
+            status:        finalStatus,
+            ...additionalData,
+        },
     });
 };
 
