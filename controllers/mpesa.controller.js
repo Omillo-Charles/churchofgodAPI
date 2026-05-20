@@ -47,14 +47,12 @@ export const initiateSTKPush = async (req, res, next) => {
 
             const amount = event.fee;
 
-            // Check for duplicate registration
+            // Block if there is already a CONFIRMED/COMPLETED registration for this event+email
             const existingRegistration = await tx.eventRegistration.findFirst({
                 where: {
                     eventId,
                     email,
-                    paymentStatus: {
-                        in: ['PENDING', 'COMPLETED'],
-                    },
+                    paymentStatus: 'COMPLETED',
                 },
             });
 
@@ -258,29 +256,24 @@ export const updatePaymentStatus = async (registrationId, targetPaymentStatus, t
             return registration;
         }
 
-        // 1. If currently COMPLETED, reject further updates
+        // 1. If currently COMPLETED, reject further updates — final state
         if (currentPaymentStatus === 'COMPLETED') {
             console.warn(`[State Transition] Rejected invalid transition from COMPLETED to ${targetPaymentStatus} for registration ${registrationId}.`);
             return registration;
         }
 
-        // 2. If currently FAILED, reject further updates
-        if (currentPaymentStatus === 'FAILED') {
-            console.warn(`[State Transition] Rejected invalid transition from FAILED to ${targetPaymentStatus} for registration ${registrationId}.`);
+        // 2. FAILED can only be reset back to PENDING (via retry flow), nothing else
+        if (currentPaymentStatus === 'FAILED' && targetPaymentStatus !== 'PENDING') {
+            console.warn(`[State Transition] Rejected transition from FAILED to ${targetPaymentStatus} for registration ${registrationId}.`);
             return registration;
         }
 
-        // 3. Only PENDING can transition to COMPLETED or FAILED
-        if (currentPaymentStatus !== 'PENDING') {
-            console.warn(`[State Transition] Rejected transition from ${currentPaymentStatus} for registration ${registrationId}.`);
-            return registration;
-        }
-
+        // 3. PENDING or FAILED (resetting to PENDING) are valid — proceed
         // Enforce registration status logic
         let finalStatus = targetStatus;
         if (targetPaymentStatus === 'COMPLETED') {
             finalStatus = 'CONFIRMED';
-        } else if (targetPaymentStatus === 'FAILED') {
+        } else if (targetPaymentStatus === 'FAILED' || targetPaymentStatus === 'PENDING') {
             finalStatus = 'PENDING';
         }
 
@@ -382,5 +375,164 @@ export const mpesaCallback = async (req, res, next) => {
     } catch (error) {
         // Do not call next(error) — a 200 was already sent to Safaricom above
         console.error('M-Pesa Callback Error:', error.message);
+    }
+};
+
+// POST /api/v1/payments/retry
+// Resends an STK push to a user who has a PENDING or FAILED registration.
+// Does NOT create a new registration — reuses the existing record.
+export const retryPayment = async (req, res, next) => {
+    const { eventId, phone } = req.body;
+    const userId = req.user.id;
+
+    if (!eventId || !phone) {
+        return res.status(400).json({
+            success: false,
+            message: 'eventId and phone are required.',
+        });
+    }
+
+    try {
+        // 1. Find the user's existing registration for this event
+        const registration = await prisma.eventRegistration.findFirst({
+            where: {
+                eventId,
+                userId,
+            },
+            include: {
+                event: { select: { id: true, title: true, fee: true } },
+            },
+        });
+
+        if (!registration) {
+            return res.status(404).json({
+                success: false,
+                message: 'No registration found for this event. Please register first.',
+            });
+        }
+
+        // 2. Guard: if already paid, reject the retry
+        if (registration.paymentStatus === 'COMPLETED') {
+            return res.status(409).json({
+                success: false,
+                message: 'Your payment for this event is already confirmed. No action needed.',
+            });
+        }
+
+        // 3. Only PENDING or FAILED registrations may retry
+        if (!['PENDING', 'FAILED'].includes(registration.paymentStatus)) {
+            return res.status(400).json({
+                success: false,
+                message: 'This registration is not eligible for a payment retry.',
+            });
+        }
+
+        const event  = registration.event;
+        const amount = event.fee;
+
+        // 4. Validate and format the phone number
+        const formattedPhone = formatPhoneNumber(phone);
+        const isValidKenyanPhone = /^254[17]\d{8}$/.test(formattedPhone);
+        if (!isValidKenyanPhone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide a valid Kenyan mobile number (e.g., 07XXXXXXXX or 2547XXXXXXXX).',
+            });
+        }
+
+        // 5. If the registration was FAILED, reset it back to PENDING so the state machine can proceed
+        if (registration.paymentStatus === 'FAILED') {
+            await updatePaymentStatus(registration.id, 'PENDING', 'PENDING');
+        }
+
+        // 6. Obtain a fresh Safaricom access token and build the STK payload
+        const timestamp   = getTimestamp();
+        const password    = generatePassword(timestamp);
+        const accessToken = await getMpesaAccessToken();
+
+        const payload = {
+            BusinessShortCode: MPESA_SHORTCODE,
+            Password:          password,
+            Timestamp:         timestamp,
+            TransactionType:   'CustomerPayBillOnline',
+            Amount:            amount,
+            PartyA:            formattedPhone,
+            PartyB:            MPESA_SHORTCODE,
+            PhoneNumber:       formattedPhone,
+            CallBackURL:       MPESA_CALLBACK_URL,
+            AccountReference:  'NTCOGK Event',
+            TransactionDesc:   `Registration – ${event.title}`,
+        };
+
+        // 7. Fire the STK push
+        let response;
+        const controller = new AbortController();
+        const timeoutId  = setTimeout(() => controller.abort(), 10000);
+
+        try {
+            response = await fetch(`${MPESA_BASE_URL}/mpesa/stkpush/v1/processrequest`, {
+                method:  'POST',
+                headers: {
+                    Authorization:  `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body:   JSON.stringify(payload),
+                signal: controller.signal,
+            });
+        } catch (fetchError) {
+            console.error('Retry STK Push Fetch Exception:', fetchError);
+            if (fetchError.name === 'AbortError') {
+                return res.status(400).json({ success: false, message: 'Request to M-Pesa gateway timed out. Please try again.' });
+            }
+            return res.status(400).json({ success: false, message: 'Network error reaching the M-Pesa gateway. Please try again later.' });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+
+        if (!response.ok) {
+            let errorDetails = '';
+            try {
+                const errorJson = await response.json();
+                errorDetails = errorJson.errorMessage || errorJson.CustomerMessage || response.statusText;
+            } catch {
+                errorDetails = response.statusText || `HTTP status ${response.status}`;
+            }
+            console.error(`Retry STK Push Non-200 (${response.status}):`, errorDetails);
+            return res.status(400).json({ success: false, message: `M-Pesa gateway error: ${errorDetails}` });
+        }
+
+        let data;
+        try {
+            data = await response.json();
+        } catch {
+            return res.status(400).json({ success: false, message: 'Received an invalid response from M-Pesa. Please try again.' });
+        }
+
+        if (data.ResponseCode !== '0') {
+            const failureMsg = data.CustomerMessage || data.ResponseDescription || 'Failed to initiate STK Push.';
+            console.error('Retry STK Push Refusal Code:', data.ResponseCode, failureMsg);
+            return res.status(400).json({ success: false, message: failureMsg });
+        }
+
+        if (!data.CheckoutRequestID) {
+            return res.status(400).json({ success: false, message: 'Missing checkout reference from M-Pesa. Please try again.' });
+        }
+
+        // 8. Update the existing registration with the new CheckoutRequestID
+        await prisma.eventRegistration.update({
+            where: { id: registration.id },
+            data:  { checkoutRequestId: data.CheckoutRequestID },
+        });
+
+        return res.status(200).json({
+            success:           true,
+            message:           `M-Pesa prompt sent to ${formattedPhone}. Enter your PIN to complete payment.`,
+            checkoutRequestId: data.CheckoutRequestID,
+            registrationId:    registration.id,
+        });
+
+    } catch (error) {
+        console.error('Retry Payment Error:', error.message);
+        next(error);
     }
 };
