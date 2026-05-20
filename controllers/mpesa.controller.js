@@ -242,6 +242,14 @@ export const initiateSTKPush = async (req, res, next) => {
         });
 
     } catch (error) {
+        // Handle DB-level unique constraint violations (e.g. from concurrent requests racing past application checks)
+        // Prisma throws P2002 when a unique constraint (like our @@unique([eventId, email])) fails.
+        if (error.code === 'P2002') {
+            return res.status(409).json({
+                success: false,
+                message: 'You have already registered for this event. Please complete your pending payment or contact church support for assistance.',
+            });
+        }
         if (error.message === 'EVENT_NOT_FOUND') {
             return res.status(404).json({ success: false, message: 'Event not found.' });
         }

@@ -86,6 +86,8 @@ model EventRegistration {
   status         RegistrationStatus @default(PENDING)
   amountPaid     Float          @default(0)
   createdAt      DateTime       @default(now())
+
+  @@unique([eventId, email])
 }
 
 enum PaymentStatus {
