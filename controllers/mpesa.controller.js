@@ -47,43 +47,76 @@ export const initiateSTKPush = async (req, res, next) => {
 
             const amount = event.fee;
 
-            // Block if there is already a CONFIRMED/COMPLETED registration for this event+email
+            // Check if this is a free registration
+            const isFree = parseFloat(amount) === 0;
+
+            // 1. Search for an existing registration by eventId and email to prevent duplicates
             const existingRegistration = await tx.eventRegistration.findFirst({
                 where: {
                     eventId,
                     email,
-                    paymentStatus: 'COMPLETED',
                 },
             });
+
+            let registration;
 
             if (existingRegistration) {
-                throw new Error('DUPLICATE_REGISTRATION');
+                // Active registration handling: Treat PENDING, PROCESSING, COMPLETED as ACTIVE
+                const activeStates = ['PENDING', 'PROCESSING', 'COMPLETED'];
+                
+                if (activeStates.includes(existingRegistration.paymentStatus)) {
+                    // Prevent multiple active registration flows for the same user/event
+                    throw new Error('DUPLICATE_REGISTRATION');
+                }
+
+                // If FAILED or EXPIRED, reuse the existing row to reduce duplicate records in the DB
+                if (['FAILED', 'EXPIRED'].includes(existingRegistration.paymentStatus)) {
+                    registration = await tx.eventRegistration.update({
+                        where: { id: existingRegistration.id },
+                        data: {
+                            userId:        req.user?.id ?? null,
+                            fullName,
+                            phone,
+                            ageGroup,
+                            gender,
+                            region,
+                            district,
+                            churchName,
+                            emergencyName:  emergencyName  || null,
+                            emergencyPhone: emergencyPhone || null,
+                            emergencyEmail: emergencyEmail || null,
+                            paymentStatus: isFree ? 'COMPLETED' : 'PENDING',
+                            status:        isFree ? 'CONFIRMED' : 'PENDING',
+                            amountPaid:    0,
+                        },
+                    });
+                } else {
+                    // Fallback for any unknown existing states
+                    throw new Error('DUPLICATE_REGISTRATION');
+                }
+            } else {
+                // No existing registration found, create a new one
+                registration = await tx.eventRegistration.create({
+                    data: {
+                        eventId,
+                        userId:        req.user?.id ?? null, // link to member account if authenticated
+                        fullName,
+                        email,
+                        phone,
+                        ageGroup,
+                        gender,
+                        region,
+                        district,
+                        churchName,
+                        emergencyName:  emergencyName  || null,
+                        emergencyPhone: emergencyPhone || null,
+                        emergencyEmail: emergencyEmail || null,
+                        paymentStatus: isFree ? 'COMPLETED' : 'PENDING',
+                        status:        isFree ? 'CONFIRMED' : 'PENDING',
+                        amountPaid:    0,
+                    },
+                });
             }
-
-            // Check if this is a free registration
-            const isFree = parseFloat(amount) === 0;
-
-            // Create the registration in PENDING or CONFIRMED state
-            const registration = await tx.eventRegistration.create({
-                data: {
-                    eventId,
-                    userId:        req.user?.id ?? null, // link to member account if authenticated
-                    fullName,
-                    email,
-                    phone,
-                    ageGroup,
-                    gender,
-                    region,
-                    district,
-                    churchName,
-                    emergencyName:  emergencyName  || null,
-                    emergencyPhone: emergencyPhone || null,
-                    emergencyEmail: emergencyEmail || null,
-                    paymentStatus: isFree ? 'COMPLETED' : 'PENDING',
-                    status:        isFree ? 'CONFIRMED' : 'PENDING',
-                    amountPaid:    0,
-                },
-            });
 
             // Bypasses STK push and returns immediately if event is free
             if (isFree) {
