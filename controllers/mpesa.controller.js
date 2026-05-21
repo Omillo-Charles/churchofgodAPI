@@ -61,39 +61,13 @@ export const initiateSTKPush = async (req, res, next) => {
             let registration;
 
             if (existingRegistration) {
-                // Active registration handling: Treat PENDING, PROCESSING, COMPLETED as ACTIVE
-                const activeStates = ['PENDING', 'PROCESSING', 'COMPLETED'];
-                
-                if (activeStates.includes(existingRegistration.paymentStatus)) {
-                    // Prevent multiple active registration flows for the same user/event
+                if (existingRegistration.paymentStatus === 'COMPLETED') {
                     throw new Error('DUPLICATE_REGISTRATION');
                 }
-
-                // If FAILED or EXPIRED, reuse the existing row to reduce duplicate records in the DB
-                if (['FAILED', 'EXPIRED'].includes(existingRegistration.paymentStatus)) {
-                    registration = await tx.eventRegistration.update({
-                        where: { id: existingRegistration.id },
-                        data: {
-                            userId:        req.user?.id ?? null,
-                            fullName,
-                            phone,
-                            ageGroup,
-                            gender,
-                            region,
-                            district,
-                            churchName,
-                            emergencyName:  emergencyName  || null,
-                            emergencyPhone: emergencyPhone || null,
-                            emergencyEmail: emergencyEmail || null,
-                            paymentStatus: isFree ? 'COMPLETED' : 'PENDING',
-                            status:        isFree ? 'CONFIRMED' : 'PENDING',
-                            amountPaid:    0,
-                        },
-                    });
-                } else {
-                    // Fallback for any unknown existing states
-                    throw new Error('DUPLICATE_REGISTRATION');
+                if (['PENDING', 'FAILED'].includes(existingRegistration.paymentStatus)) {
+                    throw new Error('REGISTRATION_UNPAID');
                 }
+                throw new Error('DUPLICATE_REGISTRATION');
             } else {
                 // No existing registration found, create a new one
                 registration = await tx.eventRegistration.create({
@@ -252,6 +226,12 @@ export const initiateSTKPush = async (req, res, next) => {
         }
         if (error.message === 'EVENT_NOT_FOUND') {
             return res.status(404).json({ success: false, message: 'Event not found.' });
+        }
+        if (error.message === 'REGISTRATION_UNPAID') {
+            return res.status(400).json({
+                success: false,
+                message: 'You have already registered for this event but have not completed your payment. Please use the retry button to complete the payment.',
+            });
         }
         if (error.message === 'DUPLICATE_REGISTRATION') {
             return res.status(409).json({
@@ -584,6 +564,42 @@ export const retryPayment = async (req, res, next) => {
 
     } catch (error) {
         console.error('Retry Payment Error:', error.message);
+        next(error);
+    }
+};
+
+// GET /api/v1/payments/status/:registrationId
+// Checks the payment status of an event registration
+export const checkPaymentStatus = async (req, res, next) => {
+    const { registrationId } = req.params;
+
+    try {
+        const registration = await prisma.eventRegistration.findUnique({
+            where: { id: registrationId },
+            select: {
+                id: true,
+                paymentStatus: true,
+                status: true,
+                amountPaid: true,
+            }
+        });
+
+        if (!registration) {
+            return res.status(404).json({
+                success: false,
+                message: 'Registration record not found.',
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                paymentStatus: registration.paymentStatus,
+                status: registration.status,
+            }
+        });
+    } catch (error) {
+        console.error('Check Payment Status Error:', error.message);
         next(error);
     }
 };
