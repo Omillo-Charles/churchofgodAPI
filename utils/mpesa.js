@@ -1,21 +1,22 @@
-import { NODE_ENV, MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_PASSKEY, MPESA_SHORTCODE } from '../config/env.js';
+import axios from 'axios';
+import { NODE_ENV, MPESA_ENVIRONMENT, MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_PASSKEY, MPESA_SHORTCODE } from '../config/env.js';
 
 // Module-level token cache to avoid redundant OAuth calls
 let cachedToken = null;
 let tokenExpiry = null;
 
 // Resolve the correct Daraja API base URL based on environment
-const MPESA_BASE_URL = NODE_ENV === 'production'
+const MPESA_BASE_URL = (MPESA_ENVIRONMENT === 'production' || NODE_ENV === 'production')
     ? 'https://api.safaricom.co.ke'
     : 'https://sandbox.safaricom.co.ke';
 
 // Generates the timestamp in YYYYMMDDHHMMSS format (UTC) as required by Safaricom
 export const getTimestamp = () => {
     const now = new Date();
-    const year  = now.getUTCFullYear();
-    const month  = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const day    = String(now.getUTCDate()).padStart(2, '0');
-    const hour   = String(now.getUTCHours()).padStart(2, '0');
+    const year = now.getUTCFullYear();
+    const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(now.getUTCDate()).padStart(2, '0');
+    const hour = String(now.getUTCHours()).padStart(2, '0');
     const minute = String(now.getUTCMinutes()).padStart(2, '0');
     const second = String(now.getUTCSeconds()).padStart(2, '0');
 
@@ -55,29 +56,37 @@ export const getMpesaAccessToken = async () => {
         return cachedToken;
     }
 
-    const credentials = Buffer.from(`${MPESA_CONSUMER_KEY}:${MPESA_CONSUMER_SECRET}`).toString('base64');
+    const consumerKey = MPESA_CONSUMER_KEY?.trim();
+    const consumerSecret = MPESA_CONSUMER_SECRET?.trim();
+
+    if (!consumerKey || !consumerSecret) {
+        throw new Error('M-Pesa Consumer Key or Secret is missing in environment variables.');
+    }
+
+    const credentials = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
     const url = `${MPESA_BASE_URL}/oauth/v1/generate?grant_type=client_credentials`;
 
     try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: { Authorization: `Basic ${credentials}` },
+        console.log(`[M-Pesa] Fetching token using Axios from ${MPESA_BASE_URL}...`);
+
+        const response = await axios.get(url, {
+            headers: {
+                'Authorization': `Basic ${credentials.replace(/\n|\r/g, '')}`,
+                'Accept': 'application/json'
+            },
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Failed to fetch M-Pesa access token: ${response.status} ${errorText}`);
-        }
-
-        const data = await response.json();
+        const data = response.data;
 
         // Cache the token and set expiry with a 60-second buffer before actual expiry
         cachedToken = data.access_token;
-        tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+        tokenExpiry = Date.now() + (parseInt(data.expires_in) - 60) * 1000;
 
+        console.log('[M-Pesa] Token fetched successfully');
         return cachedToken;
     } catch (error) {
-        console.error('M-Pesa Auth Error:', error.message);
-        throw error;
+        const errorData = error.response ? error.response.data : error.message;
+        console.error('M-Pesa OAuth Error Details:', errorData);
+        throw new Error(`Failed to fetch M-Pesa access token: ${error.response?.status || 500} ${JSON.stringify(errorData)}`);
     }
 };
