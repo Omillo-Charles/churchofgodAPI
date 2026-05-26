@@ -54,10 +54,11 @@ export const createEvent = async (req, res, next) => {
 };
 
 // GET /api/v1/events
-// Fetches all upcoming and past events from the database
+// Fetches all active (non-deleted) upcoming and past events from the database
 export const getEvents = async (req, res, next) => {
     try {
         const events = await prisma.event.findMany({
+            where:   { deletedAt: null },
             orderBy: { date: 'asc' },
         });
 
@@ -72,13 +73,13 @@ export const getEvents = async (req, res, next) => {
 };
 
 // GET /api/v1/events/:id
-// Fetches a single event by its ID
+// Fetches a single active event by its ID
 export const getEventById = async (req, res, next) => {
     const { id } = req.params;
 
     try {
-        const event = await prisma.event.findUnique({
-            where: { id },
+        const event = await prisma.event.findFirst({
+            where: { id, deletedAt: null },
         });
 
         if (!event) {
@@ -105,8 +106,8 @@ export const updateEvent = async (req, res, next) => {
     const { title, description, date, time, location, fee, category } = req.body;
 
     try {
-        const existingEvent = await prisma.event.findUnique({
-            where: { id },
+        const existingEvent = await prisma.event.findFirst({
+            where: { id, deletedAt: null },
         });
 
         if (!existingEvent) {
@@ -184,8 +185,8 @@ export const deleteEvent = async (req, res, next) => {
             });
         }
 
-        // Clean up image from Cloudinary if one exists
-        if (event.imageUrl) {
+        // Clean up Cloudinary image only for real uploaded images (not local fallback paths)
+        if (event.imageUrl?.startsWith('http')) {
             const parts = event.imageUrl.split('/');
             const fileName = parts[parts.length - 1];
             const publicId = `events/${fileName.split('.')[0]}`;
@@ -194,9 +195,11 @@ export const deleteEvent = async (req, res, next) => {
             );
         }
 
-        // Remove the event record from the database
-        await prisma.event.delete({
+        // Soft-delete: stamp deletedAt instead of removing the row so that
+        // EventRegistration and payment history are fully preserved
+        await prisma.event.update({
             where: { id },
+            data:  { deletedAt: new Date() },
         });
 
         res.status(200).json({

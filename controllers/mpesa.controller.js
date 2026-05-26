@@ -41,7 +41,7 @@ export const initiateSTKPush = async (req, res, next) => {
             // Confirm the event exists before creating any records
             const event = await tx.event.findUnique({ where: { id: eventId } });
 
-            if (!event) {
+            if (!event || event.deletedAt !== null) {
                 throw new Error('EVENT_NOT_FOUND');
             }
 
@@ -431,14 +431,14 @@ export const retryPayment = async (req, res, next) => {
                 userId,
             },
             include: {
-                event: { select: { id: true, title: true, fee: true } },
+                event: { select: { id: true, title: true, fee: true, deletedAt: true } },
             },
         });
 
-        if (!registration) {
+        if (!registration || registration.event.deletedAt !== null) {
             return res.status(404).json({
                 success: false,
-                message: 'No registration found for this event. Please register first.',
+                message: 'No active registration found for this event.',
             });
         }
 

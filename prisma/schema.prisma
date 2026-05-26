@@ -58,6 +58,7 @@ model Event {
   category      String?
   imageUrl      String?
   registrations EventRegistration[]
+  deletedAt     DateTime?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 }
