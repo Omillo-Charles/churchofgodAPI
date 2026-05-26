@@ -26,7 +26,11 @@ app.use(passport.initialize());
 
 // Allow Next.js frontend to make credentialed requests
 app.use((req, res, next) => {
-    const allowedOrigins = ['http://localhost:3000'];
+    const allowedOrigins = [
+        'http://localhost:3000',
+        'https://ntcogk.vercel.app',
+        'https://ntcogk.com'
+    ];
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
