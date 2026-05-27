@@ -12,6 +12,7 @@ import prayerRoutes from './routes/prayer.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import mpesaRoutes from './routes/mpesa.routes.js';
 import eventRoutes from './routes/event.routes.js';
+import announcementRoutes from './routes/announcement.routes.js';
 import errorMiddleware from './middlewares/error.middleware.js';
 import { generalLimiter } from './middlewares/limit.middleware.js';
 
@@ -73,6 +74,9 @@ app.use('/api/v1/payments', mpesaRoutes);
 
 // Event routes
 app.use('/api/v1/events', eventRoutes);
+
+// Announcement routes
+app.use('/api/v1/announcements', announcementRoutes);
 
 // Error middleware
 app.use(errorMiddleware);
