@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createEvent, getEvents, getEventById, updateEvent, deleteEvent } from '../controllers/event.controller.js';
-import { isAuthenticated } from '../middlewares/auth.middleware.js';
+import { isAuthenticated, authorize } from '../middlewares/auth.middleware.js';
 import { upload } from '../middlewares/upload.middleware.js';
 
 const router = Router();
@@ -14,15 +14,15 @@ router.get('/', getEvents);
 router.get('/:id', getEventById);
 
 // POST /api/v1/events
-// Protected route to create a new event with optional image upload
-router.post('/', isAuthenticated, upload.single('image'), createEvent);
+// Protected route to create a new event with optional image upload (Only Admin or Clergy)
+router.post('/', isAuthenticated, authorize('ADMIN', 'CLERGY'), upload.single('image'), createEvent);
 
 // PATCH /api/v1/events/:id
-// Protected route to update an event with optional new image upload
-router.patch('/:id', isAuthenticated, upload.single('image'), updateEvent);
+// Protected route to update an event with optional new image upload (Only Admin or Clergy)
+router.patch('/:id', isAuthenticated, authorize('ADMIN', 'CLERGY'), upload.single('image'), updateEvent);
 
 // DELETE /api/v1/events/:id
-// Protected route to delete an event and clean up Cloudinary assets
-router.delete('/:id', isAuthenticated, deleteEvent);
+// Protected route to delete an event and clean up Cloudinary assets (Only Admin or Clergy)
+router.delete('/:id', isAuthenticated, authorize('ADMIN', 'CLERGY'), deleteEvent);
 
 export default router;
