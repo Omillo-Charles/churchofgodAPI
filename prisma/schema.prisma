@@ -33,6 +33,7 @@ model User {
   otpExpiry          DateTime?
   isVerified         Boolean   @default(false)
   registrations      EventRegistration[]
+  announcements      Announcement[]
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 }
@@ -101,4 +102,14 @@ enum RegistrationStatus {
   PENDING
   CONFIRMED
   CANCELLED
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  body      String
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

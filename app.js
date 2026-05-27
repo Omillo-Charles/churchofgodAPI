@@ -29,7 +29,11 @@ app.use((req, res, next) => {
     const allowedOrigins = [
         'http://localhost:3000',
         'https://ntcogk.vercel.app',
-        'https://ntcogk.com'
+        'http://ntcogk.vercel.app',
+        'https://ntcogk.com',
+        'http://ntcogk.com',
+        'https://www.ntcogk.com',
+        'http://www.ntcogk.com'
     ];
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
